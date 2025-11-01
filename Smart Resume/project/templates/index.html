@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Résumé avec Dictée Vocale</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
+    <style>
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mic-button {
+            font-size: 2em;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: gray;
+        }
+
+        .pulse {
+            position: relative;
+            display: none;
+            width: 30px;
+            height: 30px;
+        }
+
+        .pulse span {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid red;
+            border-radius: 50%;
+            animation: pulse-animation 1.5s infinite;
+            opacity: 0.6;
+        }
+
+        .pulse span:nth-child(2) {
+            animation-delay: 0.5s;
+        }
+
+        .pulse span:nth-child(3) {
+            animation-delay: 1s;
+        }
+
+        .stop-button {
+            font-size: 2em;
+            color: red;
+            border: none;
+            background: none;
+            cursor: pointer;
+            display: none;
+        }
+
+        .paste-icon {
+            font-size: 2em;
+            cursor: pointer;
+        }
+
+        .speak-button {
+            font-size: 1.5em;
+            cursor: pointer;
+            background: none;
+            border: none;
+            margin-top: 10px;
+        }
+        #stop-speech-btn {
+    display: none;
+}
+
+
+        @keyframes pulse-animation {
+            0% {
+                transform: scale(1);
+                opacity: 0.6;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <img src="/static/logo.png" alt="Logo">
+            <h1>AI Summary Generator</h1>
+        </div>
+        <p class="header-tagline">Simplify your content writing with AI-powered summaries, transform your paragraphs, articles in the click.</p>
+    </header>
+
+    <div class="container">
+        <main>
+            <div class="controls">
+                <button id="mic-button" class="mic-button" title="Start voice dictation">🎤</button>
+                <div class="pulse" id="pulse-animation">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <button id="stop-button" class="stop-button" title="Arrêter">⏹️</button>
+                <button id="paste-icon" class="paste-icon" title="paste image">📋</button>
+            </div>
+            <div class="input-result-container">
+                <div class="text-area-container">
+                    <h4 class="textarea-title">Your Text:</h4>
+                    <textarea id="text-input" placeholder="Enter your text here..."></textarea>
+                    <button id="summarize-btn">Generate Summary</button>
+                </div>
+                <div class="text-area-container">
+                    <h4 class="textarea-title">Your Summary:</h4>
+                    <textarea id="summary-output" placeholder="The summary will appear here..." readonly></textarea>
+                    <button id="speak-btn" class="speak-button" title="listen to Summary">🔊</button>
+                    <button id="stop-speech-btn" class="speak-button" title="Stop">⏹️</button>
+                </div>
+                <div id="loading-message" style="display:none; font-size: 1.2em; color: #666; margin-top: 10px;">
+                    L'image est en train d'être traitée, veuillez patienter...
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const micButton = document.getElementById('mic-button');
+        const stopButton = document.getElementById('stop-button');
+        const pulseAnimation = document.getElementById('pulse-animation');
+        const textarea = document.getElementById('text-input');
+        const summarizeBtn = document.getElementById('summarize-btn');
+        const summaryOutput = document.getElementById('summary-output');
+        const pasteIcon = document.getElementById('paste-icon');
+        const speakBtn = document.getElementById('speak-btn');
+        const stopSpeechBtn = document.getElementById('stop-speech-btn');
+
+        // Langues disponibles
+        const languages = {
+            'fr': 'fr-FR',
+            'en': 'en-US',
+            'es': 'es-ES',
+            'de': 'de-DE',
+            'it': 'it-IT',
+            'pt': 'pt-PT'
+        };
+
+        let currentLang = 'en'; // Langue par défaut
+        let speechSynthesisUtterance = null;
+
+     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = languages[currentLang];  // Set initial language
+            recognition.continuous = true;
+
+            micButton.addEventListener('click', () => {
+                recognition.start();
+                micButton.style.display = 'none';
+                pulseAnimation.style.display = 'block';
+                stopButton.style.display = 'inline';
+            });
+            stopButton.addEventListener('click', () => {
+                recognition.stop();
+                micButton.style.display = 'inline';
+                pulseAnimation.style.display = 'none';
+                stopButton.style.display = 'none';
+            });
+            recognition.onresult = function(event) {
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join(' ');
+                textarea.value += transcript + " ";
+            };
+            recognition.onerror = function(event) {
+            console.error("Erreur de reconnaissance vocale :", event.error);
+            };
+        } else {
+            alert("Votre navigateur ne supporte pas la reconnaissance vocale.");
+        }
+        pasteIcon.addEventListener('click', function() {
+            textarea.addEventListener('paste', handlePaste);
+            alert('Vous pouvez maintenant coller une image dans la zone de texte');
+        });
+
+        // Fonction pour gérer le collage d'une image
+        function handlePaste(event) {
+            const items = event.clipboardData.items;
+            textarea.value = '🔄 Image en traitement...';
+
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const blob = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = new Image();
+                        img.src = e.target.result;
+                        img.onload = function() {
+                            // Analyser l'image avec Tesseract
+                            Tesseract.recognize(
+                                img,
+                                'fra', // Langue française
+                                {
+                                    logger: (m) => console.log(m),
+                                }
+                            ).then(({ data: { text } }) => {
+                                textarea.value = text;
+                            }).catch((error) => {
+                                console.error("Erreur d'OCR :", error);
+                                alert("Erreur lors de l'extraction du texte de l'image.");
+                            });
+                        };
+                    };
+                    reader.readAsDataURL(blob);
+                }
+            }
+        }
+
+        summarizeBtn.addEventListener('click', async () => {
+            const text = textarea.value;
+            summaryOutput.value = 'Summary is loading 🔄';
+
+            try {
+                const response = await fetch('/summarize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    displaySummaryWordByWord(data.summary);
+                } else {
+                    summaryOutput.value = "Erreur lors de la génération du résumé.";
+                }
+            } catch (error) {
+                summaryOutput.value = "Une erreur s'est produite lors de la génération du résumé.";
+            }
+        });
+
+        speakBtn.addEventListener('click', () => {
+    const summaryText = summaryOutput.value;
+    if (summaryText) {
+        speechSynthesisUtterance = new SpeechSynthesisUtterance(summaryText);
+        speechSynthesisUtterance.lang = languages[currentLang]; // Utiliser la langue actuelle pour la synthèse vocale
+        
+        const voices = speechSynthesis.getVoices();
+        speechSynthesisUtterance.voice = voices.find(voice => voice.lang === languages[currentLang]);
+
+        // Gestion des boutons
+        speakBtn.style.display = 'none'; // Masquer le bouton 🔊
+        stopSpeechBtn.style.display = 'inline'; // Afficher le bouton ⏹️
+
+        // Lecture de la synthèse vocale
+        speechSynthesis.speak(speechSynthesisUtterance);
+        // Réinitialiser les boutons à la fin de la lecture
+        speechSynthesisUtterance.onend = () => {
+            stopSpeechBtn.style.display = 'none'; // Masquer le bouton ⏹️
+            speakBtn.style.display = 'inline'; // Réafficher le bouton 🔊
+        };
+    } else {
+        alert("Aucun résumé généré pour la lecture.");
+    }
+});
+
+stopSpeechBtn.addEventListener('click', () => {
+    if (speechSynthesisUtterance) {
+        speechSynthesis.cancel(); // Arrêter la lecture
+        speechSynthesisUtterance = null;
+
+        // Réinitialiser les boutons
+        stopSpeechBtn.style.display = 'none'; // Masquer le bouton ⏹️
+        speakBtn.style.display = 'inline'; // Réafficher le bouton 🔊
+    }
+});
+
+
+        function displaySummaryWordByWord(summary) {
+            const words = summary.split(' ');
+            summaryOutput.value = '';
+            let index = 0;
+
+            const interval = setInterval(() => {
+                if (index < words.length) {
+                    summaryOutput.value += words[index] + ' ';
+                    index++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 200);
+        }
+    </script>
+</body>
+</html>
